@@ -250,7 +250,7 @@ The command for deterministic replay will be added after the replay engine is im
 * [x] Step 3 — Capability artifact schema
 * [x] Step 4 — Computer surface abstraction
 * [x] Step 5 — Deterministic replay engine
-* [ ] Step 6 — LLM discovery agent
+* [x] Step 6 — LLM discovery agent
 * [ ] Step 7 — Artifact generation
 * [ ] Step 8 — Error handling
 * [ ] Step 9 — Safety guardrails
