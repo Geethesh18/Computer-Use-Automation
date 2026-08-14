@@ -62,8 +62,6 @@
       "id": "open_savings",
       "action": "click",
       "target": {
-        "role": "link",
-        "name": "View Account",
         "css": "tr:has-text('Savings') a"
       },
       "checkpoint": {
