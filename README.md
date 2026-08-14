@@ -249,7 +249,7 @@ The command for deterministic replay will be added after the replay engine is im
 * [x] Step 2 — Project setup and mock banking application
 * [x] Step 3 — Capability artifact schema
 * [x] Step 4 — Computer surface abstraction
-* [ ] Step 5 — Deterministic replay engine
+* [x] Step 5 — Deterministic replay engine
 * [ ] Step 6 — LLM discovery agent
 * [ ] Step 7 — Artifact generation
 * [ ] Step 8 — Error handling
