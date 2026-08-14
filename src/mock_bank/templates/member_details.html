@@ -4,40 +4,66 @@
 Member Details
 {% endblock %}
 
-
 {% block content %}
 
-<h2>Member Details</h2>
+<section class="content-card">
 
-<table border="1" cellpadding="8">
+    <div class="card-header">
+        <h2>Member Details</h2>
+        <p>Member profile and account access information.</p>
+    </div>
 
-    <tr>
-        <th>Member ID</th>
-        <td>{{ member.member_id }}</td>
-    </tr>
+    <div class="card-body">
 
-    <tr>
-        <th>Name</th>
-        <td>{{ member.name }}</td>
-    </tr>
+        <table class="data-table">
 
-    <tr>
-        <th>Status</th>
-        <td>{{ member.status }}</td>
-    </tr>
+            <tr>
+                <th>Member ID</th>
+                <td>{{ member.member_id }}</td>
+            </tr>
 
-</table>
+            <tr>
+                <th>Name</th>
+                <td>{{ member.name }}</td>
+            </tr>
 
-<br>
+            <tr>
+                <th>Status</th>
+                <td>
+                    {% if member.status == "Active" %}
+                        <span class="status-active">
+                            {{ member.status }}
+                        </span>
+                    {% else %}
+                        <span class="status-restricted">
+                            {{ member.status }}
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
 
-<a href="/members/{{ member.member_id }}/accounts">
-    View Accounts
-</a>
+        </table>
 
-<br><br>
+        <div class="actions">
 
-<a href="/">
-    Return to Member Search
-</a>
+            <a
+                href="/members/{{ member.member_id }}/accounts"
+                class="button"
+            >
+                View Accounts
+            </a>
+
+            <a
+                href="/"
+                class="button button-secondary"
+            >
+                Return to Member Search
+            </a>
+
+        </div>
+
+    </div>
+
+</section>
 
 {% endblock %}

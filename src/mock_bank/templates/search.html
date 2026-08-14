@@ -6,30 +6,45 @@ Member Search
 
 {% block content %}
 
-<h2>Member Search</h2>
+<section class="content-card">
 
-<p>Enter a member ID to retrieve the member record.</p>
-
-<form method="post" action="/members/search">
-
-    <div>
-        <label for="member_id">Member ID</label>
-
-        <input
-            type="text"
-            id="member_id"
-            name="member_id"
-            required
-            autocomplete="off"
-        >
+    <div class="card-header">
+        <h2>Member Search</h2>
+        <p>Enter a member ID to retrieve the member record.</p>
     </div>
 
-    <br>
+    <div class="card-body">
 
-    <button type="submit">
-        Search Member
-    </button>
+        <form method="post" action="/members/search">
 
-</form>
+            <div class="form-group">
+
+                <label for="member_id">
+                    Member ID
+                </label>
+
+                <input
+                    type="text"
+                    id="member_id"
+                    name="member_id"
+                    required
+                    autocomplete="off"
+                    placeholder="Enter member ID"
+                >
+
+            </div>
+
+            <button
+                type="submit"
+                class="button"
+            >
+                Search Member
+            </button>
+
+        </form>
+
+    </div>
+
+</section>
 
 {% endblock %}

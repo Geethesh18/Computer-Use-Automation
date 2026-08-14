@@ -6,45 +6,98 @@ Member Accounts
 
 {% block content %}
 
-<h2>Member Accounts</h2>
+<section class="content-card">
 
-<p>
-    Member:
-    <strong>{{ member.name }}</strong>
-</p>
+    <div class="card-header">
+        <h2>Member Accounts</h2>
+        <p>Review accounts associated with this member.</p>
+    </div>
 
-<p>
-    Member ID:
-    <strong>{{ member.member_id }}</strong>
-</p>
+    <div class="card-body">
 
-<table border="1" cellpadding="8">
+        <!-- Member Summary -->
+        <div class="summary-grid">
 
-    <tr>
-        <th>Account Type</th>
-        <th>Action</th>
-    </tr>
+            <p class="summary-item">
+                <span class="summary-label">
+                    Member
+                </span>
 
-    {% for account_key, account in member.accounts.items() %}
+                <span class="summary-value">
+                    {{ member.name }}
+                </span>
+            </p>
 
-    <tr>
-        <td>{{ account.account_type }}</td>
+            <p class="summary-item">
+                <span class="summary-label">
+                    Member ID
+                </span>
 
-        <td>
-            <a href="/members/{{ member.member_id }}/accounts/{{ account_key }}">
-                View Account
+                <span class="summary-value">
+                    {{ member.member_id }}
+                </span>
+            </p>
+
+        </div>
+
+        <!-- Account Table -->
+        <table class="data-table">
+
+            <thead>
+                <tr>
+                    <th>Account Type</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for account_key, account in member.accounts.items() %}
+
+                <tr>
+
+                    <td>
+                        {{ account.account_type }}
+                    </td>
+
+                    <td>
+                        <a
+                            href="/members/{{ member.member_id }}/accounts/{{ account_key }}"
+                            class="action-link"
+                        >
+                            View Account
+                        </a>
+                    </td>
+
+                </tr>
+
+                {% endfor %}
+
+            </tbody>
+
+        </table>
+
+        <!-- Navigation -->
+        <div class="actions">
+
+            <a
+                href="/members/{{ member.member_id }}"
+                class="button button-secondary"
+            >
+                Return to Member Details
             </a>
-        </td>
-    </tr>
 
-    {% endfor %}
+            <a
+                href="/"
+                class="button button-secondary"
+            >
+                Return to Member Search
+            </a>
 
-</table>
+        </div>
 
-<br>
+    </div>
 
-<a href="/members/{{ member.member_id }}">
-    Return to Member Details
-</a>
+</section>
 
 {% endblock %}

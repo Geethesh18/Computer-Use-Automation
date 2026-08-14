@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 
 from src.mock_bank.data import MEMBERS
 
@@ -21,6 +22,14 @@ app = FastAPI(
     title="Mock Legacy Banking Application",
     description="Local banking application for computer-use automation testing",
     version="1.0.0",
+)
+
+app.mount(
+    "/static",
+    StaticFiles(
+        directory=str(BASE_DIR / "static")
+    ),
+    name="static",
 )
 
 
