@@ -255,5 +255,5 @@ The command for deterministic replay will be added after the replay engine is im
 * [x] Step 8 — Error handling
 * [x] Step 9 — Safety guardrails
 * [x] Step 10 — Human escalation
-* [ ] Step 11 — Evidence and testing
+* [x] Step 11 — Evidence and testing
 * [ ] Step 12 — Final README and design report
