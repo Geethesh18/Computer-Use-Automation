@@ -29,7 +29,10 @@ class ReplayEngine:
         inputs: dict[str, Any],
     ) -> ReplayResult:
 
-        # Validate invocation parameters before touching the UI.
+        # -------------------------------------------------
+        # Validate invocation inputs before touching the UI
+        # -------------------------------------------------
+
         input_error = self._validate_inputs(
             artifact,
             inputs,
@@ -45,16 +48,28 @@ class ReplayEngine:
         outputs: dict[str, Any] = {}
 
         try:
+            # -------------------------------------------------
+            # Start computer surface
+            # -------------------------------------------------
+
             self.surface.start()
 
-            # Deterministic entry point.
+            # -------------------------------------------------
+            # Navigate to deterministic entry point
+            # -------------------------------------------------
+
             self.surface.navigate(
                 artifact.entrypoint.url
             )
 
+            # -------------------------------------------------
+            # Execute artifact steps in order
+            # -------------------------------------------------
+
             for step in artifact.steps:
 
-                # Detect known application states before proceeding.
+                # Check whether the application is already
+                # showing a known business/failure state.
                 known_result = self._detect_known_state(
                     artifact,
                     step.id,
@@ -64,21 +79,27 @@ class ReplayEngine:
                     return known_result
 
                 try:
-                    # ---------------------------------------------
+                    # =========================================
                     # NAVIGATE
-                    # ---------------------------------------------
+                    # =========================================
+
                     if step.action == ActionType.NAVIGATE:
+
                         url = self._resolve_value(
                             step.value,
                             inputs,
                         )
 
-                        self.surface.navigate(str(url))
+                        self.surface.navigate(
+                            str(url)
+                        )
 
-                    # ---------------------------------------------
+                    # =========================================
                     # FILL
-                    # ---------------------------------------------
+                    # =========================================
+
                     elif step.action == ActionType.FILL:
+
                         if step.target is None:
                             raise ValueError(
                                 "Fill step requires a target."
@@ -94,10 +115,12 @@ class ReplayEngine:
                             str(value),
                         )
 
-                    # ---------------------------------------------
+                    # =========================================
                     # CLICK
-                    # ---------------------------------------------
+                    # =========================================
+
                     elif step.action == ActionType.CLICK:
+
                         if step.target is None:
                             raise ValueError(
                                 "Click step requires a target."
@@ -107,10 +130,12 @@ class ReplayEngine:
                             step.target
                         )
 
-                    # ---------------------------------------------
+                    # =========================================
                     # EXTRACT
-                    # ---------------------------------------------
+                    # =========================================
+
                     elif step.action == ActionType.EXTRACT:
+
                         if step.target is None:
                             raise ValueError(
                                 "Extract step requires a target."
@@ -118,7 +143,8 @@ class ReplayEngine:
 
                         if step.output is None:
                             raise ValueError(
-                                "Extract step requires an output name."
+                                "Extract step requires "
+                                "an output name."
                             )
 
                         raw_value = self._extract_output(
@@ -135,14 +161,18 @@ class ReplayEngine:
 
                     else:
                         raise ValueError(
-                            f"Unsupported action: {step.action}"
+                            f"Unsupported action: "
+                            f"{step.action}"
                         )
 
-                except Exception as exc:
-                    # The action may have failed because the
-                    # application entered a known business/failure
-                    # state.
+                # -------------------------------------------------
+                # Step execution failure
+                # -------------------------------------------------
 
+                except Exception as exc:
+
+                    # The action may have failed because the
+                    # application entered a known state.
                     known_result = self._detect_known_state(
                         artifact,
                         step.id,
@@ -163,7 +193,10 @@ class ReplayEngine:
                         observed=self._safe_visible_text(),
                     )
 
-                # Check for known states immediately after an action.
+                # -------------------------------------------------
+                # Detect known state after successful action
+                # -------------------------------------------------
+
                 known_result = self._detect_known_state(
                     artifact,
                     step.id,
@@ -172,13 +205,25 @@ class ReplayEngine:
                 if known_result is not None:
                     return known_result
 
-                # Verify step-level checkpoint.
+                # -------------------------------------------------
+                # Verify step checkpoint
+                # -------------------------------------------------
+
                 if step.checkpoint is not None:
+
                     if not self._check(
-                        step.checkpoint
+                        step.checkpoint,
+                        inputs,
                     ):
                         self._capture_failure(
                             step.id
+                        )
+
+                        expected_value = (
+                            self._resolve_template(
+                                step.checkpoint.value,
+                                inputs,
+                            )
                         )
 
                         return ReplayResult(
@@ -187,20 +232,28 @@ class ReplayEngine:
                             step_id=step.id,
                             expected=(
                                 f"{step.checkpoint.type.value}: "
-                                f"{step.checkpoint.value}"
+                                f"{expected_value}"
                             ),
                             observed=self._safe_visible_text(),
                         )
 
-            # ---------------------------------------------
-            # Final success condition
-            # ---------------------------------------------
+            # -------------------------------------------------
+            # Verify final capability success condition
+            # -------------------------------------------------
 
             if not self._check(
-                artifact.success_condition
+                artifact.success_condition,
+                inputs,
             ):
                 self._capture_failure(
                     "success_condition"
+                )
+
+                expected_value = (
+                    self._resolve_template(
+                        artifact.success_condition.value,
+                        inputs,
+                    )
                 )
 
                 return ReplayResult(
@@ -209,17 +262,26 @@ class ReplayEngine:
                     step_id="success_condition",
                     expected=(
                         f"{artifact.success_condition.type.value}: "
-                        f"{artifact.success_condition.value}"
+                        f"{expected_value}"
                     ),
                     observed=self._safe_visible_text(),
                 )
+
+            # -------------------------------------------------
+            # Successful replay
+            # -------------------------------------------------
 
             return ReplayResult(
                 status=ReplayStatus.SUCCESS,
                 outputs=outputs,
             )
 
+        # -----------------------------------------------------
+        # Unexpected replay-level failure
+        # -----------------------------------------------------
+
         except Exception as exc:
+
             self._capture_failure(
                 "replay"
             )
@@ -246,6 +308,7 @@ class ReplayEngine:
 
         for parameter in artifact.inputs:
 
+            # Required input missing
             if (
                 parameter.required
                 and parameter.name not in inputs
@@ -262,6 +325,10 @@ class ReplayEngine:
                 parameter.name
             ]
 
+            # ---------------------------------------------
+            # STRING
+            # ---------------------------------------------
+
             if (
                 parameter.type == ParameterType.STRING
                 and not isinstance(value, str)
@@ -270,6 +337,10 @@ class ReplayEngine:
                     f"Input '{parameter.name}' "
                     f"must be a string."
                 )
+
+            # ---------------------------------------------
+            # NUMBER
+            # ---------------------------------------------
 
             if (
                 parameter.type == ParameterType.NUMBER
@@ -283,6 +354,10 @@ class ReplayEngine:
                     f"must be a number."
                 )
 
+            # ---------------------------------------------
+            # BOOLEAN
+            # ---------------------------------------------
+
             if (
                 parameter.type == ParameterType.BOOLEAN
                 and not isinstance(value, bool)
@@ -295,7 +370,7 @@ class ReplayEngine:
         return None
 
     # =====================================================
-    # Parameter substitution
+    # Parameter substitution for action values
     # =====================================================
 
     def _resolve_value(
@@ -303,6 +378,18 @@ class ReplayEngine:
         value: Any,
         inputs: dict[str, Any],
     ) -> Any:
+        """
+        Resolve a value when the entire value is a
+        parameter placeholder.
+
+        Example:
+
+            {{ member_id }}
+
+        becomes:
+
+            10002
+        """
 
         if not isinstance(value, str):
             return value
@@ -336,38 +423,126 @@ class ReplayEngine:
         ]
 
     # =====================================================
+    # General template substitution
+    # =====================================================
+
+    def _resolve_template(
+        self,
+        value: str,
+        inputs: dict[str, Any],
+    ) -> str:
+        """
+        Resolve parameter placeholders embedded anywhere
+        inside a string.
+
+        Examples:
+
+            /members/{{ member_id }}
+
+        becomes:
+
+            /members/10002
+
+        and:
+
+            /members/{{ member_id }}/accounts
+
+        becomes:
+
+            /members/10002/accounts
+        """
+
+        resolved = value
+
+        for name, input_value in inputs.items():
+
+            # Standard artifact representation:
+            # {{ member_id }}
+            resolved = resolved.replace(
+                "{{ " + name + " }}",
+                str(input_value),
+            )
+
+            # Also tolerate:
+            # {{member_id}}
+            resolved = resolved.replace(
+                "{{" + name + "}}",
+                str(input_value),
+            )
+
+        return resolved
+
+    # =====================================================
     # Checkpoints
     # =====================================================
 
     def _check(
         self,
         checkpoint: Checkpoint,
+        inputs: dict[str, Any] | None = None,
     ) -> bool:
+        """
+        Verify a checkpoint against the current UI state.
+
+        Checkpoints may contain invocation parameters.
+
+        Example artifact checkpoint:
+
+            /members/{{ member_id }}/accounts
+
+        During a replay with:
+
+            member_id = 10002
+
+        it becomes:
+
+            /members/10002/accounts
+        """
+
+        value = checkpoint.value
+
+        if inputs:
+            value = self._resolve_template(
+                value,
+                inputs,
+            )
+
+        # ---------------------------------------------
+        # URL checkpoint
+        # ---------------------------------------------
 
         if (
             checkpoint.type
             == CheckpointType.URL_CONTAINS
         ):
             return (
-                checkpoint.value
+                value
                 in self.surface.get_url()
             )
+
+        # ---------------------------------------------
+        # Text checkpoint
+        # ---------------------------------------------
 
         if (
             checkpoint.type
             == CheckpointType.TEXT_PRESENT
         ):
             return (
-                checkpoint.value
+                value
                 in self.surface.get_visible_text()
             )
+
+        # ---------------------------------------------
+        # Element checkpoint
+        # ---------------------------------------------
 
         if (
             checkpoint.type
             == CheckpointType.ELEMENT_PRESENT
         ):
             return (
-                checkpoint.value
+                value
                 in self.surface.get_visible_text()
             )
 
@@ -433,13 +608,13 @@ class ReplayEngine:
         """
         Extract a value associated with a target label.
 
-        The mock legacy banking application uses table rows
-        that Playwright exposes as visible text similar to:
+        The mock legacy banking application exposes table
+        rows in visible text similar to:
 
             Current Balance    $4520.75
 
-        Depending on the browser representation, the label
-        and value may appear either:
+        Depending on browser representation, label and
+        value may appear either:
 
         1. On the same tab-separated line:
 
@@ -453,14 +628,21 @@ class ReplayEngine:
         Both representations are supported.
         """
 
-        # If the artifact explicitly provides a CSS locator,
-        # use the surface directly.
+        # ---------------------------------------------
+        # Explicit CSS extraction
+        # ---------------------------------------------
+
         if target.css:
             return self.surface.extract_text(
                 target
             )
 
+        # ---------------------------------------------
+        # Label-based extraction
+        # ---------------------------------------------
+
         if target.text:
+
             visible_text = (
                 self.surface.get_visible_text()
             )
@@ -474,13 +656,13 @@ class ReplayEngine:
 
             for index, line in enumerate(lines):
 
-                # -----------------------------------------
+                # -------------------------------------
                 # Case 1:
-                #
                 # Current Balance\t$4520.75
-                # -----------------------------------------
+                # -------------------------------------
 
                 if "\t" in line:
+
                     parts = [
                         part.strip()
                         for part
@@ -494,20 +676,24 @@ class ReplayEngine:
                     ):
                         return parts[1]
 
-                # -----------------------------------------
+                # -------------------------------------
                 # Case 2:
                 #
                 # Current Balance
                 # $4520.75
-                # -----------------------------------------
+                # -------------------------------------
 
                 if line == target.text:
+
                     if index + 1 < len(lines):
                         return lines[
                             index + 1
                         ]
 
-        # Final fallback to normal surface extraction.
+        # ---------------------------------------------
+        # Final surface fallback
+        # ---------------------------------------------
+
         return self.surface.extract_text(
             target
         )
@@ -528,8 +714,7 @@ class ReplayEngine:
                 output
                 for output
                 in artifact.outputs
-                if output.name
-                == output_name
+                if output.name == output_name
             ),
             None,
         )
@@ -558,6 +743,7 @@ class ReplayEngine:
             definition.type
             == ParameterType.NUMBER
         ):
+
             cleaned = re.sub(
                 r"[^0-9.\-]",
                 "",
@@ -582,6 +768,7 @@ class ReplayEngine:
             definition.type
             == ParameterType.BOOLEAN
         ):
+
             normalized = (
                 raw_value
                 .strip()

@@ -1,0 +1,135 @@
+{
+  "schema_version": "1.0",
+  "capability": {
+    "name": "lookup_savings_balance",
+    "version": "1.0.0",
+    "description": "Look up a member and return their current savings balance"
+  },
+  "inputs": [
+    {
+      "name": "member_id",
+      "type": "string",
+      "required": true,
+      "description": "Member identifier used for lookup"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "balance",
+      "type": "number",
+      "description": "Current savings account balance"
+    }
+  ],
+  "entrypoint": {
+    "url": "http://127.0.0.1:8000/"
+  },
+  "steps": [
+    {
+      "id": "discovered_1_fill",
+      "action": "fill",
+      "target": {
+        "role": "textbox",
+        "name": "Member ID",
+        "text": null,
+        "css": null
+      },
+      "value": "{{ member_id }}",
+      "output": null,
+      "checkpoint": null
+    },
+    {
+      "id": "discovered_2_click",
+      "action": "click",
+      "target": {
+        "role": "button",
+        "name": "Search Member",
+        "text": null,
+        "css": null
+      },
+      "value": null,
+      "output": null,
+      "checkpoint": {
+        "type": "url_contains",
+        "value": "/members/{{ member_id }}"
+      }
+    },
+    {
+      "id": "discovered_3_click",
+      "action": "click",
+      "target": {
+        "role": "link",
+        "name": "View Accounts",
+        "text": null,
+        "css": null
+      },
+      "value": null,
+      "output": null,
+      "checkpoint": {
+        "type": "url_contains",
+        "value": "/members/{{ member_id }}/accounts"
+      }
+    },
+    {
+      "id": "discovered_4_click",
+      "action": "click",
+      "target": {
+        "role": null,
+        "name": null,
+        "text": null,
+        "css": "tr:has-text('Savings') a"
+      },
+      "value": null,
+      "output": null,
+      "checkpoint": {
+        "type": "url_contains",
+        "value": "/members/{{ member_id }}/accounts/savings"
+      }
+    },
+    {
+      "id": "extract_balance",
+      "action": "extract",
+      "target": {
+        "role": null,
+        "name": null,
+        "text": "Current Balance",
+        "css": null
+      },
+      "value": null,
+      "output": "balance",
+      "checkpoint": null
+    }
+  ],
+  "success_condition": {
+    "type": "text_present",
+    "value": "Current Balance"
+  },
+  "business_outcomes": [
+    {
+      "code": "MEMBER_NOT_FOUND",
+      "detect": {
+        "type": "text_present",
+        "value": "No member record was found"
+      },
+      "description": "No member exists for the supplied member ID"
+    }
+  ],
+  "failure_conditions": [
+    {
+      "code": "PERMISSION_DENIED",
+      "detect": {
+        "type": "text_present",
+        "value": "Permission Denied"
+      },
+      "description": "Account information cannot be accessed"
+    }
+  ],
+  "policy": {
+    "allowed_action_types": [
+      "navigate",
+      "fill",
+      "click",
+      "extract"
+    ],
+    "risk_level": "read_only"
+  }
+}
