@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}
+Member Search
+{% endblock %}
+
+{% block content %}
+
+<h2>Member Search</h2>
+
+<p>Enter a member ID to retrieve the member record.</p>
+
+<form method="post" action="/members/search">
+
+    <div>
+        <label for="member_id">Member ID</label>
+
+        <input
+            type="text"
+            id="member_id"
+            name="member_id"
+            required
+            autocomplete="off"
+        >
+    </div>
+
+    <br>
+
+    <button type="submit">
+        Search Member
+    </button>
+
+</form>
+
+{% endblock %}

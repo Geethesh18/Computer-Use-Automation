@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}
+Permission Denied
+{% endblock %}
+
+{% block content %}
+
+<h2>Permission Denied</h2>
+
+<p>
+    Account information cannot be accessed for this member.
+</p>
+
+<p>
+    Member ID:
+    <strong>{{ member.member_id }}</strong>
+</p>
+
+<p>
+    Member Status:
+    <strong>{{ member.status }}</strong>
+</p>
+
+<p>
+    Contact a supervisor if access is required.
+</p>
+
+<a href="/members/{{ member.member_id }}">
+    Return to Member Details
+</a>
+
+<br><br>
+
+<a href="/">
+    Return to Member Search
+</a>
+
+{% endblock %}

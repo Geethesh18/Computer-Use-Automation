@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block title %}
+Account Details
+{% endblock %}
+
+{% block content %}
+
+<h2>Account Details</h2>
+
+<p>
+    Member:
+    <strong>{{ member.name }}</strong>
+</p>
+
+<p>
+    Member ID:
+    <strong>{{ member.member_id }}</strong>
+</p>
+
+<table border="1" cellpadding="8">
+
+    <tr>
+        <th>Account Type</th>
+        <td>{{ account.account_type }}</td>
+    </tr>
+
+    <tr>
+        <th>Current Balance</th>
+        <td>${{ "%.2f"|format(account.balance) }}</td>
+    </tr>
+
+</table>
+
+<br>
+
+<a href="/members/{{ member.member_id }}/accounts">
+    Return to Accounts
+</a>
+
+<br><br>
+
+<a href="/">
+    Return to Member Search
+</a>
+
+{% endblock %}

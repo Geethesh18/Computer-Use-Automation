@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}
+Member Not Found
+{% endblock %}
+
+
+{% block content %}
+
+<h2>Member Search Result</h2>
+
+<p>
+    No member record was found for Member ID:
+    <strong>{{ member_id }}</strong>
+</p>
+
+<p>Verify the Member ID and try again.</p>
+
+<a href="/">
+    Return to Member Search
+</a>
+
+{% endblock %}

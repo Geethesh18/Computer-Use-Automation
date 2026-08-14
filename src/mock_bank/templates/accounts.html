@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}
+Member Accounts
+{% endblock %}
+
+{% block content %}
+
+<h2>Member Accounts</h2>
+
+<p>
+    Member:
+    <strong>{{ member.name }}</strong>
+</p>
+
+<p>
+    Member ID:
+    <strong>{{ member.member_id }}</strong>
+</p>
+
+<table border="1" cellpadding="8">
+
+    <tr>
+        <th>Account Type</th>
+        <th>Action</th>
+    </tr>
+
+    {% for account_key, account in member.accounts.items() %}
+
+    <tr>
+        <td>{{ account.account_type }}</td>
+
+        <td>
+            <a href="/members/{{ member.member_id }}/accounts/{{ account_key }}">
+                View Account
+            </a>
+        </td>
+    </tr>
+
+    {% endfor %}
+
+</table>
+
+<br>
+
+<a href="/members/{{ member.member_id }}">
+    Return to Member Details
+</a>
+
+{% endblock %}
