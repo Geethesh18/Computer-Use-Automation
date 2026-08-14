@@ -253,7 +253,7 @@ The command for deterministic replay will be added after the replay engine is im
 * [x] Step 6 — LLM discovery agent
 * [x] Step 7 — Artifact generation
 * [x] Step 8 — Error handling
-* [ ] Step 9 — Safety guardrails
-* [ ] Step 10 — Human escalation
+* [x] Step 9 — Safety guardrails
+* [x] Step 10 — Human escalation
 * [ ] Step 11 — Evidence and testing
 * [ ] Step 12 — Final README and design report
