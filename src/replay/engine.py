@@ -11,6 +11,10 @@ from src.artifacts.models import (
     Step,
 )
 from src.replay.models import ReplayResult, ReplayStatus
+from src.safety.policy import (
+    SafetyPolicy,
+    SafetyViolation,
+)
 from src.surfaces.base import ComputerSurface
 
 
@@ -22,9 +26,10 @@ class ReplayEngine:
 
     Replay supports:
     - typed input validation
+    - central safety-policy enforcement
     - parameter substitution
     - deterministic ordered execution
-    - bounded retries for transient action failures
+    - bounded retries for transient failures
     - known business outcomes
     - known hard failures
     - checkpoint validation
@@ -36,9 +41,16 @@ class ReplayEngine:
         self,
         surface: ComputerSurface,
         max_retries: int = 2,
+        safety_policy: SafetyPolicy | None = None,
     ):
         self.surface = surface
         self.max_retries = max_retries
+
+        self.safety_policy = (
+            safety_policy
+            if safety_policy is not None
+            else SafetyPolicy()
+        )
 
     # =====================================================
     # Main replay
@@ -51,7 +63,7 @@ class ReplayEngine:
     ) -> ReplayResult:
 
         # -------------------------------------------------
-        # Validate invocation inputs before touching the UI
+        # Validate invocation inputs
         # -------------------------------------------------
 
         input_error = self._validate_inputs(
@@ -67,6 +79,26 @@ class ReplayEngine:
                 recoverable=False,
             )
 
+        # -------------------------------------------------
+        # Central safety validation
+        #
+        # IMPORTANT:
+        # This happens BEFORE the browser/surface starts.
+        # -------------------------------------------------
+
+        try:
+            self.safety_policy.validate_artifact(
+                artifact
+            )
+
+        except SafetyViolation as exc:
+            return ReplayResult(
+                status=ReplayStatus.FAILURE,
+                code="SAFETY_VIOLATION",
+                message=str(exc),
+                recoverable=False,
+            )
+
         outputs: dict[str, Any] = {}
 
         try:
@@ -77,7 +109,15 @@ class ReplayEngine:
             self.surface.start()
 
             # -------------------------------------------------
-            # Navigate to deterministic entry point
+            # Validate entrypoint again at execution boundary
+            # -------------------------------------------------
+
+            self.safety_policy.validate_url(
+                artifact.entrypoint.url
+            )
+
+            # -------------------------------------------------
+            # Navigate to deterministic entrypoint
             # -------------------------------------------------
 
             self.surface.navigate(
@@ -90,8 +130,10 @@ class ReplayEngine:
 
             for step in artifact.steps:
 
-                # Check whether the application is already
-                # showing a known business/failure state.
+                # ---------------------------------------------
+                # Detect known state before action
+                # ---------------------------------------------
+
                 known_result = self._detect_known_state(
                     artifact,
                     step.id,
@@ -101,7 +143,7 @@ class ReplayEngine:
                     return known_result
 
                 # ---------------------------------------------
-                # Execute with bounded deterministic retries
+                # Execute with bounded retries
                 # ---------------------------------------------
 
                 execution_result = self._execute_with_retry(
@@ -115,7 +157,7 @@ class ReplayEngine:
                     return execution_result
 
                 # ---------------------------------------------
-                # Detect known state after successful action
+                # Detect known state after action
                 # ---------------------------------------------
 
                 known_result = self._detect_known_state(
@@ -127,7 +169,7 @@ class ReplayEngine:
                     return known_result
 
                 # ---------------------------------------------
-                # Verify step checkpoint
+                # Verify checkpoint
                 # ---------------------------------------------
 
                 if step.checkpoint is not None:
@@ -160,7 +202,7 @@ class ReplayEngine:
                         )
 
             # -------------------------------------------------
-            # Verify final capability success condition
+            # Final success condition
             # -------------------------------------------------
 
             if not self._check(
@@ -191,7 +233,7 @@ class ReplayEngine:
                 )
 
             # -------------------------------------------------
-            # Successful replay
+            # Success
             # -------------------------------------------------
 
             return ReplayResult(
@@ -199,9 +241,27 @@ class ReplayEngine:
                 outputs=outputs,
             )
 
-        # -----------------------------------------------------
-        # Unexpected replay-level failure
-        # -----------------------------------------------------
+        # -------------------------------------------------
+        # Safety violation detected during execution
+        # -------------------------------------------------
+
+        except SafetyViolation as exc:
+
+            self._capture_failure(
+                "safety_violation"
+            )
+
+            return ReplayResult(
+                status=ReplayStatus.FAILURE,
+                code="SAFETY_VIOLATION",
+                message=str(exc),
+                observed=self._safe_visible_text(),
+                recoverable=False,
+            )
+
+        # -------------------------------------------------
+        # Unexpected replay failure
+        # -------------------------------------------------
 
         except Exception as exc:
 
@@ -232,7 +292,7 @@ class ReplayEngine:
         outputs: dict[str, Any],
     ) -> ReplayResult | None:
         """
-        Execute one artifact step using a bounded retry policy.
+        Execute one artifact step using bounded retries.
 
         max_retries=2 means:
 
@@ -240,17 +300,7 @@ class ReplayEngine:
             retry 1
             retry 2
 
-        for a maximum of three attempts.
-
         No LLM is involved in recovery.
-
-        Returns:
-            None
-                Step succeeded.
-
-            ReplayResult
-                Execution must stop because of a known
-                outcome or an exhausted retry budget.
         """
 
         last_error: Exception | None = None
@@ -270,13 +320,35 @@ class ReplayEngine:
 
                 return None
 
+            # ---------------------------------------------
+            # Safety failures are NEVER retryable
+            # ---------------------------------------------
+
+            except SafetyViolation as exc:
+
+                self._capture_failure(
+                    step.id
+                )
+
+                return ReplayResult(
+                    status=ReplayStatus.FAILURE,
+                    code="SAFETY_VIOLATION",
+                    step_id=step.id,
+                    message=str(exc),
+                    observed=self._safe_visible_text(),
+                    attempts=attempt,
+                    recoverable=False,
+                )
+
+            # ---------------------------------------------
+            # Ordinary execution failure
+            # ---------------------------------------------
+
             except Exception as exc:
+
                 last_error = exc
 
-                # -----------------------------------------
                 # Did the application enter a known state?
-                # -----------------------------------------
-
                 known_result = self._detect_known_state(
                     artifact,
                     step.id,
@@ -285,10 +357,7 @@ class ReplayEngine:
                 if known_result is not None:
                     return known_result
 
-                # -----------------------------------------
-                # Retry only while budget remains
-                # -----------------------------------------
-
+                # Retry while budget remains.
                 if attempt < total_attempts:
                     continue
 
@@ -317,7 +386,7 @@ class ReplayEngine:
         )
 
     # =====================================================
-    # Execute one artifact step
+    # Execute one deterministic step
     # =====================================================
 
     def _execute_step(
@@ -328,11 +397,19 @@ class ReplayEngine:
         outputs: dict[str, Any],
     ) -> None:
         """
-        Execute exactly one deterministic artifact action.
+        Execute exactly one artifact action.
 
-        This method performs no retries and contains no
-        model reasoning.
+        Every action passes through central policy before
+        reaching the computer surface.
         """
+
+        # -------------------------------------------------
+        # Central action-policy enforcement
+        # -------------------------------------------------
+
+        self.safety_policy.validate_action(
+            step.action
+        )
 
         # ---------------------------------------------
         # NAVIGATE
@@ -345,8 +422,15 @@ class ReplayEngine:
                 inputs,
             )
 
+            resolved_url = str(url)
+
+            # Navigation must remain inside an allowed origin.
+            self.safety_policy.validate_url(
+                resolved_url
+            )
+
             self.surface.navigate(
-                str(url)
+                resolved_url
             )
 
             return
@@ -499,7 +583,7 @@ class ReplayEngine:
         return None
 
     # =====================================================
-    # Parameter substitution for action values
+    # Parameter substitution
     # =====================================================
 
     def _resolve_value(
@@ -508,16 +592,10 @@ class ReplayEngine:
         inputs: dict[str, Any],
     ) -> Any:
         """
-        Resolve a value when the entire value is a
+        Resolve a value when the complete value is a
         parameter placeholder.
 
-        Example:
-
-            {{ member_id }}
-
-        becomes:
-
-            10002
+        {{ member_id }} -> 10002
         """
 
         if not isinstance(value, str):
@@ -561,15 +639,11 @@ class ReplayEngine:
         inputs: dict[str, Any],
     ) -> str:
         """
-        Resolve placeholders embedded anywhere in a string.
+        Resolve placeholders embedded within strings.
 
-        Example:
-
-            /members/{{ member_id }}/accounts
-
-        becomes:
-
-            /members/10002/accounts
+        /members/{{ member_id }}/accounts
+        ->
+        /members/10002/accounts
         """
 
         resolved = value
@@ -581,7 +655,6 @@ class ReplayEngine:
                 str(input_value),
             )
 
-            # Also tolerate {{member_id}}
             resolved = resolved.replace(
                 "{{" + name + "}}",
                 str(input_value),
@@ -598,11 +671,6 @@ class ReplayEngine:
         checkpoint: Checkpoint,
         inputs: dict[str, Any] | None = None,
     ) -> bool:
-        """
-        Verify a checkpoint against the current UI state.
-
-        Checkpoints may contain invocation parameters.
-        """
 
         value = checkpoint.value
 
@@ -611,10 +679,6 @@ class ReplayEngine:
                 value,
                 inputs,
             )
-
-        # ---------------------------------------------
-        # URL checkpoint
-        # ---------------------------------------------
 
         if (
             checkpoint.type
@@ -625,10 +689,6 @@ class ReplayEngine:
                 in self.surface.get_url()
             )
 
-        # ---------------------------------------------
-        # Text checkpoint
-        # ---------------------------------------------
-
         if (
             checkpoint.type
             == CheckpointType.TEXT_PRESENT
@@ -637,10 +697,6 @@ class ReplayEngine:
                 value
                 in self.surface.get_visible_text()
             )
-
-        # ---------------------------------------------
-        # Element checkpoint
-        # ---------------------------------------------
 
         if (
             checkpoint.type
@@ -715,38 +771,20 @@ class ReplayEngine:
         """
         Extract a value associated with a target label.
 
-        The mock legacy banking application exposes table
-        rows in visible text similar to:
+        Supports both:
 
-            Current Balance    $4520.75
+            Current Balance\t$4520.75
 
-        Depending on browser representation, label and
-        value may appear either:
-
-        1. On the same tab-separated line:
-
-            Current Balance\\t$4520.75
-
-        2. On consecutive lines:
+        and:
 
             Current Balance
             $4520.75
-
-        Both representations are supported.
         """
-
-        # ---------------------------------------------
-        # Explicit CSS extraction
-        # ---------------------------------------------
 
         if target.css:
             return self.surface.extract_text(
                 target
             )
-
-        # ---------------------------------------------
-        # Label-based extraction
-        # ---------------------------------------------
 
         if target.text:
 
@@ -764,8 +802,7 @@ class ReplayEngine:
             for index, line in enumerate(lines):
 
                 # -------------------------------------
-                # Case 1:
-                # Current Balance\t$4520.75
+                # Same tab-separated line
                 # -------------------------------------
 
                 if "\t" in line:
@@ -784,10 +821,7 @@ class ReplayEngine:
                         return parts[1]
 
                 # -------------------------------------
-                # Case 2:
-                #
-                # Current Balance
-                # $4520.75
+                # Consecutive lines
                 # -------------------------------------
 
                 if line == target.text:
@@ -796,10 +830,6 @@ class ReplayEngine:
                         return lines[
                             index + 1
                         ]
-
-        # ---------------------------------------------
-        # Final surface fallback
-        # ---------------------------------------------
 
         return self.surface.extract_text(
             target
@@ -929,7 +959,7 @@ class ReplayEngine:
 
         except Exception:
             # Evidence collection must never hide
-            # the original replay failure.
+            # the original failure.
             pass
 
     def _safe_visible_text(
