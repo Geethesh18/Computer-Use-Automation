@@ -1,0 +1,116 @@
+{
+  "schema_version": "1.0",
+  "capability": {
+    "name": "lookup_savings_balance",
+    "version": "1.0.0",
+    "description": "Look up a member and return their current savings balance"
+  },
+  "inputs": [
+    {
+      "name": "member_id",
+      "type": "string",
+      "required": true,
+      "description": "Member identifier used for lookup"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "balance",
+      "type": "number",
+      "description": "Current savings account balance"
+    }
+  ],
+  "entrypoint": {
+    "url": "http://127.0.0.1:8000/"
+  },
+  "steps": [
+    {
+      "id": "fill_member_id",
+      "action": "fill",
+      "target": {
+        "role": "textbox",
+        "name": "Member ID",
+        "css": "#member_id"
+      },
+      "value": "{{ member_id }}"
+    },
+    {
+      "id": "submit_member_search",
+      "action": "click",
+      "target": {
+        "role": "button",
+        "name": "Search Member"
+      },
+      "checkpoint": {
+        "type": "url_contains",
+        "value": "/members/"
+      }
+    },
+    {
+      "id": "open_accounts",
+      "action": "click",
+      "target": {
+        "role": "link",
+        "name": "View Accounts"
+      },
+      "checkpoint": {
+        "type": "url_contains",
+        "value": "/accounts"
+      }
+    },
+    {
+      "id": "open_savings",
+      "action": "click",
+      "target": {
+        "role": "link",
+        "name": "View Account",
+        "css": "tr:has-text('Savings') a"
+      },
+      "checkpoint": {
+        "type": "url_contains",
+        "value": "/accounts/savings"
+      }
+    },
+    {
+      "id": "extract_balance",
+      "action": "extract",
+      "target": {
+        "text": "Current Balance"
+      },
+      "output": "balance"
+    }
+  ],
+  "success_condition": {
+    "type": "text_present",
+    "value": "Current Balance"
+  },
+  "business_outcomes": [
+    {
+      "code": "MEMBER_NOT_FOUND",
+      "detect": {
+        "type": "text_present",
+        "value": "No member record was found"
+      },
+      "description": "No member exists for the supplied member ID"
+    }
+  ],
+  "failure_conditions": [
+    {
+      "code": "PERMISSION_DENIED",
+      "detect": {
+        "type": "text_present",
+        "value": "Permission Denied"
+      },
+      "description": "Account information cannot be accessed"
+    }
+  ],
+  "policy": {
+    "allowed_action_types": [
+      "navigate",
+      "fill",
+      "click",
+      "extract"
+    ],
+    "risk_level": "read_only"
+  }
+}
