@@ -8,6 +8,7 @@ from src.artifacts.models import (
     CheckpointType,
     Locator,
     ParameterType,
+    Step,
 )
 from src.replay.models import ReplayResult, ReplayStatus
 from src.surfaces.base import ComputerSurface
@@ -18,10 +19,30 @@ class ReplayEngine:
     Deterministically executes a saved capability artifact.
 
     No LLM is used in this execution path.
+
+    Replay supports:
+    - typed input validation
+    - parameter substitution
+    - deterministic ordered execution
+    - bounded retries for transient action failures
+    - known business outcomes
+    - known hard failures
+    - checkpoint validation
+    - typed output extraction
+    - failure evidence capture
     """
 
-    def __init__(self, surface: ComputerSurface):
+    def __init__(
+        self,
+        surface: ComputerSurface,
+        max_retries: int = 2,
+    ):
         self.surface = surface
+        self.max_retries = max_retries
+
+    # =====================================================
+    # Main replay
+    # =====================================================
 
     def replay(
         self,
@@ -43,6 +64,7 @@ class ReplayEngine:
                 status=ReplayStatus.FAILURE,
                 code="INVALID_INPUT",
                 message=input_error,
+                recoverable=False,
             )
 
         outputs: dict[str, Any] = {}
@@ -78,124 +100,23 @@ class ReplayEngine:
                 if known_result is not None:
                     return known_result
 
-                try:
-                    # =========================================
-                    # NAVIGATE
-                    # =========================================
+                # ---------------------------------------------
+                # Execute with bounded deterministic retries
+                # ---------------------------------------------
 
-                    if step.action == ActionType.NAVIGATE:
+                execution_result = self._execute_with_retry(
+                    step=step,
+                    artifact=artifact,
+                    inputs=inputs,
+                    outputs=outputs,
+                )
 
-                        url = self._resolve_value(
-                            step.value,
-                            inputs,
-                        )
+                if execution_result is not None:
+                    return execution_result
 
-                        self.surface.navigate(
-                            str(url)
-                        )
-
-                    # =========================================
-                    # FILL
-                    # =========================================
-
-                    elif step.action == ActionType.FILL:
-
-                        if step.target is None:
-                            raise ValueError(
-                                "Fill step requires a target."
-                            )
-
-                        value = self._resolve_value(
-                            step.value,
-                            inputs,
-                        )
-
-                        self.surface.fill(
-                            step.target,
-                            str(value),
-                        )
-
-                    # =========================================
-                    # CLICK
-                    # =========================================
-
-                    elif step.action == ActionType.CLICK:
-
-                        if step.target is None:
-                            raise ValueError(
-                                "Click step requires a target."
-                            )
-
-                        self.surface.click(
-                            step.target
-                        )
-
-                    # =========================================
-                    # EXTRACT
-                    # =========================================
-
-                    elif step.action == ActionType.EXTRACT:
-
-                        if step.target is None:
-                            raise ValueError(
-                                "Extract step requires a target."
-                            )
-
-                        if step.output is None:
-                            raise ValueError(
-                                "Extract step requires "
-                                "an output name."
-                            )
-
-                        raw_value = self._extract_output(
-                            step.target
-                        )
-
-                        outputs[step.output] = (
-                            self._convert_output(
-                                artifact,
-                                step.output,
-                                raw_value,
-                            )
-                        )
-
-                    else:
-                        raise ValueError(
-                            f"Unsupported action: "
-                            f"{step.action}"
-                        )
-
-                # -------------------------------------------------
-                # Step execution failure
-                # -------------------------------------------------
-
-                except Exception as exc:
-
-                    # The action may have failed because the
-                    # application entered a known state.
-                    known_result = self._detect_known_state(
-                        artifact,
-                        step.id,
-                    )
-
-                    if known_result is not None:
-                        return known_result
-
-                    self._capture_failure(
-                        step.id
-                    )
-
-                    return ReplayResult(
-                        status=ReplayStatus.FAILURE,
-                        code="STEP_EXECUTION_FAILED",
-                        step_id=step.id,
-                        message=str(exc),
-                        observed=self._safe_visible_text(),
-                    )
-
-                # -------------------------------------------------
+                # ---------------------------------------------
                 # Detect known state after successful action
-                # -------------------------------------------------
+                # ---------------------------------------------
 
                 known_result = self._detect_known_state(
                     artifact,
@@ -205,9 +126,9 @@ class ReplayEngine:
                 if known_result is not None:
                     return known_result
 
-                # -------------------------------------------------
+                # ---------------------------------------------
                 # Verify step checkpoint
-                # -------------------------------------------------
+                # ---------------------------------------------
 
                 if step.checkpoint is not None:
 
@@ -235,6 +156,7 @@ class ReplayEngine:
                                 f"{expected_value}"
                             ),
                             observed=self._safe_visible_text(),
+                            recoverable=False,
                         )
 
             # -------------------------------------------------
@@ -265,6 +187,7 @@ class ReplayEngine:
                         f"{expected_value}"
                     ),
                     observed=self._safe_visible_text(),
+                    recoverable=False,
                 )
 
             # -------------------------------------------------
@@ -291,10 +214,217 @@ class ReplayEngine:
                 code="REPLAY_FAILED",
                 message=str(exc),
                 observed=self._safe_visible_text(),
+                recoverable=False,
             )
 
         finally:
             self.surface.stop()
+
+    # =====================================================
+    # Bounded retry execution
+    # =====================================================
+
+    def _execute_with_retry(
+        self,
+        step: Step,
+        artifact: CapabilityArtifact,
+        inputs: dict[str, Any],
+        outputs: dict[str, Any],
+    ) -> ReplayResult | None:
+        """
+        Execute one artifact step using a bounded retry policy.
+
+        max_retries=2 means:
+
+            attempt 1
+            retry 1
+            retry 2
+
+        for a maximum of three attempts.
+
+        No LLM is involved in recovery.
+
+        Returns:
+            None
+                Step succeeded.
+
+            ReplayResult
+                Execution must stop because of a known
+                outcome or an exhausted retry budget.
+        """
+
+        last_error: Exception | None = None
+        total_attempts = self.max_retries + 1
+
+        for attempt in range(
+            1,
+            total_attempts + 1,
+        ):
+            try:
+                self._execute_step(
+                    step=step,
+                    artifact=artifact,
+                    inputs=inputs,
+                    outputs=outputs,
+                )
+
+                return None
+
+            except Exception as exc:
+                last_error = exc
+
+                # -----------------------------------------
+                # Did the application enter a known state?
+                # -----------------------------------------
+
+                known_result = self._detect_known_state(
+                    artifact,
+                    step.id,
+                )
+
+                if known_result is not None:
+                    return known_result
+
+                # -----------------------------------------
+                # Retry only while budget remains
+                # -----------------------------------------
+
+                if attempt < total_attempts:
+                    continue
+
+                break
+
+        # -------------------------------------------------
+        # Retry budget exhausted
+        # -------------------------------------------------
+
+        self._capture_failure(
+            step.id
+        )
+
+        return ReplayResult(
+            status=ReplayStatus.FAILURE,
+            code="STEP_EXECUTION_FAILED",
+            step_id=step.id,
+            message=(
+                f"Step failed after "
+                f"{total_attempts} attempts: "
+                f"{last_error}"
+            ),
+            observed=self._safe_visible_text(),
+            attempts=total_attempts,
+            recoverable=False,
+        )
+
+    # =====================================================
+    # Execute one artifact step
+    # =====================================================
+
+    def _execute_step(
+        self,
+        step: Step,
+        artifact: CapabilityArtifact,
+        inputs: dict[str, Any],
+        outputs: dict[str, Any],
+    ) -> None:
+        """
+        Execute exactly one deterministic artifact action.
+
+        This method performs no retries and contains no
+        model reasoning.
+        """
+
+        # ---------------------------------------------
+        # NAVIGATE
+        # ---------------------------------------------
+
+        if step.action == ActionType.NAVIGATE:
+
+            url = self._resolve_value(
+                step.value,
+                inputs,
+            )
+
+            self.surface.navigate(
+                str(url)
+            )
+
+            return
+
+        # ---------------------------------------------
+        # FILL
+        # ---------------------------------------------
+
+        if step.action == ActionType.FILL:
+
+            if step.target is None:
+                raise ValueError(
+                    "Fill step requires a target."
+                )
+
+            value = self._resolve_value(
+                step.value,
+                inputs,
+            )
+
+            self.surface.fill(
+                step.target,
+                str(value),
+            )
+
+            return
+
+        # ---------------------------------------------
+        # CLICK
+        # ---------------------------------------------
+
+        if step.action == ActionType.CLICK:
+
+            if step.target is None:
+                raise ValueError(
+                    "Click step requires a target."
+                )
+
+            self.surface.click(
+                step.target
+            )
+
+            return
+
+        # ---------------------------------------------
+        # EXTRACT
+        # ---------------------------------------------
+
+        if step.action == ActionType.EXTRACT:
+
+            if step.target is None:
+                raise ValueError(
+                    "Extract step requires a target."
+                )
+
+            if step.output is None:
+                raise ValueError(
+                    "Extract step requires an output name."
+                )
+
+            raw_value = self._extract_output(
+                step.target
+            )
+
+            outputs[step.output] = (
+                self._convert_output(
+                    artifact,
+                    step.output,
+                    raw_value,
+                )
+            )
+
+            return
+
+        raise ValueError(
+            f"Unsupported action: "
+            f"{step.action}"
+        )
 
     # =====================================================
     # Input validation
@@ -308,7 +438,6 @@ class ReplayEngine:
 
         for parameter in artifact.inputs:
 
-            # Required input missing
             if (
                 parameter.required
                 and parameter.name not in inputs
@@ -432,18 +561,9 @@ class ReplayEngine:
         inputs: dict[str, Any],
     ) -> str:
         """
-        Resolve parameter placeholders embedded anywhere
-        inside a string.
+        Resolve placeholders embedded anywhere in a string.
 
-        Examples:
-
-            /members/{{ member_id }}
-
-        becomes:
-
-            /members/10002
-
-        and:
+        Example:
 
             /members/{{ member_id }}/accounts
 
@@ -456,15 +576,12 @@ class ReplayEngine:
 
         for name, input_value in inputs.items():
 
-            # Standard artifact representation:
-            # {{ member_id }}
             resolved = resolved.replace(
                 "{{ " + name + " }}",
                 str(input_value),
             )
 
-            # Also tolerate:
-            # {{member_id}}
+            # Also tolerate {{member_id}}
             resolved = resolved.replace(
                 "{{" + name + "}}",
                 str(input_value),
@@ -485,18 +602,6 @@ class ReplayEngine:
         Verify a checkpoint against the current UI state.
 
         Checkpoints may contain invocation parameters.
-
-        Example artifact checkpoint:
-
-            /members/{{ member_id }}/accounts
-
-        During a replay with:
-
-            member_id = 10002
-
-        it becomes:
-
-            /members/10002/accounts
         """
 
         value = checkpoint.value
@@ -549,7 +654,7 @@ class ReplayEngine:
         return False
 
     # =====================================================
-    # Known business outcomes and failures
+    # Known business outcomes and hard failures
     # =====================================================
 
     def _detect_known_state(
@@ -572,6 +677,7 @@ class ReplayEngine:
                     code=outcome.code,
                     step_id=step_id,
                     message=outcome.description,
+                    recoverable=False,
                 )
 
         # ---------------------------------------------
@@ -593,6 +699,7 @@ class ReplayEngine:
                     step_id=step_id,
                     message=failure.description,
                     observed=self._safe_visible_text(),
+                    recoverable=False,
                 )
 
         return None

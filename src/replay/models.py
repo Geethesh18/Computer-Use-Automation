@@ -24,3 +24,7 @@ class ReplayResult(BaseModel):
     expected: str | None = None
 
     observed: str | None = None
+
+    attempts: int | None = None
+
+    recoverable: bool | None = None
