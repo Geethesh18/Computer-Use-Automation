@@ -1,0 +1,13 @@
+{
+  "status": "success",
+  "outputs": {
+    "balance": 9875.2
+  },
+  "code": null,
+  "step_id": null,
+  "message": null,
+  "expected": null,
+  "observed": null,
+  "attempts": null,
+  "recoverable": null
+}

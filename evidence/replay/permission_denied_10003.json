@@ -1,0 +1,11 @@
+{
+  "status": "failure",
+  "outputs": {},
+  "code": "PERMISSION_DENIED",
+  "step_id": "discovered_3_click",
+  "message": "Account information cannot be accessed",
+  "expected": null,
+  "observed": "Community Trust Banking System\n\nInternal Member Services Portal\n\nPermission Denied\n\nAccount information cannot be accessed for this member.\n\nMember ID: 10003\n\nMember Status: Restricted\n\nContact a supervisor if access is required.\n\nReturn to Member Details\n\nReturn to Member Search\n\nInternal Training Environment",
+  "attempts": null,
+  "recoverable": false
+}

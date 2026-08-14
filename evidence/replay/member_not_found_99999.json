@@ -1,0 +1,11 @@
+{
+  "status": "business_outcome",
+  "outputs": {},
+  "code": "MEMBER_NOT_FOUND",
+  "step_id": "discovered_2_click",
+  "message": "No member exists for the supplied member ID",
+  "expected": null,
+  "observed": null,
+  "attempts": null,
+  "recoverable": false
+}
