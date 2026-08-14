@@ -1,0 +1,115 @@
+{
+  "success": true,
+  "goal": "Look up member 10001 and return their current savings balance.",
+  "outputs": {
+    "balance": 4520.75
+  },
+  "steps": [
+    {
+      "step_number": 1,
+      "observation": {
+        "url": "http://127.0.0.1:8000/",
+        "visible_text": "Community Trust Banking System\n\nInternal Member Services Portal\n\nMember Search\n\nEnter a member ID to retrieve the member record.\n\nMember ID \n\nSearch Member\n\nInternal Training Environment"
+      },
+      "decision": {
+        "action": "fill",
+        "target": {
+          "role": "textbox",
+          "name": "Member ID",
+          "text": null,
+          "css": null
+        },
+        "value": "10001",
+        "outputs": {
+          "balance": null
+        },
+        "reason": "Fill the Member ID textbox with the target member ID to initiate the search."
+      },
+      "result": "executed"
+    },
+    {
+      "step_number": 2,
+      "observation": {
+        "url": "http://127.0.0.1:8000/",
+        "visible_text": "Community Trust Banking System\n\nInternal Member Services Portal\n\nMember Search\n\nEnter a member ID to retrieve the member record.\n\nMember ID \n\nSearch Member\n\nInternal Training Environment"
+      },
+      "decision": {
+        "action": "click",
+        "target": {
+          "role": "button",
+          "name": "Search Member",
+          "text": null,
+          "css": null
+        },
+        "value": null,
+        "outputs": {
+          "balance": null
+        },
+        "reason": "Click the Search Member button to retrieve the member record for ID 10001."
+      },
+      "result": "executed"
+    },
+    {
+      "step_number": 3,
+      "observation": {
+        "url": "http://127.0.0.1:8000/members/10001",
+        "visible_text": "Community Trust Banking System\n\nInternal Member Services Portal\n\nMember Details\nMember ID\t10001\nName\tAlex Morgan\nStatus\tActive\n\nView Accounts\n\nReturn to Member Search\n\nInternal Training Environment"
+      },
+      "decision": {
+        "action": "click",
+        "target": {
+          "role": "link",
+          "name": "View Accounts",
+          "text": null,
+          "css": null
+        },
+        "value": null,
+        "outputs": {
+          "balance": null
+        },
+        "reason": "Click the 'View Accounts' link to navigate to the member's account list and access the savings balance."
+      },
+      "result": "executed"
+    },
+    {
+      "step_number": 4,
+      "observation": {
+        "url": "http://127.0.0.1:8000/members/10001/accounts",
+        "visible_text": "Community Trust Banking System\n\nInternal Member Services Portal\n\nMember Accounts\n\nMember: Alex Morgan\n\nMember ID: 10001\n\nAccount Type\tAction\nSavings\tView Account\nChecking\tView Account\n\nReturn to Member Details\n\nInternal Training Environment"
+      },
+      "decision": {
+        "action": "click",
+        "target": {
+          "role": null,
+          "name": null,
+          "text": null,
+          "css": "tr:has-text('Savings') a"
+        },
+        "value": null,
+        "outputs": {
+          "balance": null
+        },
+        "reason": "Click the 'View Account' link for the Savings account to navigate to the account detail page where the balance can be viewed."
+      },
+      "result": "executed"
+    },
+    {
+      "step_number": 5,
+      "observation": {
+        "url": "http://127.0.0.1:8000/members/10001/accounts/savings",
+        "visible_text": "Community Trust Banking System\n\nInternal Member Services Portal\n\nAccount Details\n\nMember: Alex Morgan\n\nMember ID: 10001\n\nAccount Type\tSavings\nCurrent Balance\t$4520.75\n\nReturn to Accounts\n\nReturn to Member Search\n\nInternal Training Environment"
+      },
+      "decision": {
+        "action": "complete",
+        "target": null,
+        "value": null,
+        "outputs": {
+          "balance": 4520.75
+        },
+        "reason": "The current savings balance is visible on the page."
+      },
+      "result": "goal_completed"
+    }
+  ],
+  "reason": "The current savings balance is visible on the page."
+}
