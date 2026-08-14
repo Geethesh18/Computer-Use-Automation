@@ -246,7 +246,7 @@ The command for deterministic replay will be added after the replay engine is im
 ## Project Status
 
 * [x] Step 1 — Architecture and technology decisions
-* [ ] Step 2 — Project setup and mock banking application
+* [x] Step 2 — Project setup and mock banking application
 * [ ] Step 3 — Capability artifact schema
 * [ ] Step 4 — Computer surface abstraction
 * [ ] Step 5 — Deterministic replay engine
